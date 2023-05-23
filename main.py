@@ -1,82 +1,81 @@
-import keras
+import dlib
+import cv2
+import face_recognition
 import numpy as np
-import matplotlib.pyplot as plt
-# %matplotlib
-# inline
 
-from keras.layers import Dense, Flatten
-from keras.models import Sequential
-from keras.datasets import mnist
+# pip install cmake
+# pip install dlib
 
-# Загрузка данных из датасета mnist и разделяем датасет
-# на тренировочную выборку из массива картинок
-# 28 на 28 разрешением. объем массива 60к экземпляров.
-(X_train, y_train), (X_test, y_test) = mnist.load_data()
 
-plt.imshow(X_train[12], cmap='binary')
-plt.axis('off')
+# Загрузка изображения
+img = cv2.imread('image.jpg')
 
-# нормируем пиксели, чтобы они были от 0 до 1
+# Инициализация детектора лица
+detector = dlib.get_frontal_face_detector()
 
-X_train = X_train / 255
-X_test = X_test / 255
+# Обнаружение лиц на изображении
+faces = detector(img, 1)
 
-# векторизируем массивы чисел, чтобы получить один единственный
-# массив из 0 и 1, который будет представлять каждое из цифр.
-y_train = keras.utils.to_categorical(y_train, 10)
-y_test = keras.utils.to_categorical(y_test, 10)
+# Загрузка предобученной модели для выделения черт лица
+predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
 
-# иициализируем нашу модель
-model = Sequential()
+# Отображение найденных черт лица на изображении
+for face in faces:
+    # Нахождение координат лица на изображении
+    x1 = face.left()
+    y1 = face.top()
+    x2 = face.right()
+    y2 = face.bottom()
 
-# создаем первый слой, в нём будет 32 нейрона, также указываем
-# форму входимых данных.
-model.add(Dense(32, activation='relu', input_shape=X_train[0].shape))
+    # Выделение лица на изображении
+    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-# создаем еще 5 слоёв
-model.add(Dense(64, activation='relu'))
-model.add(Dense(128, activation='relu'))
-model.add(Dense(256, activation='relu'))
-# model.add(Dense(512, activation='relu'))
-# model.add(Dense(1024, activation='relu'))
+    # Выделение черт лица на изображении
+    landmarks = predictor(img, face)
+    for n in range(68):
+        x = landmarks.part(n).x
+        y = landmarks.part(n).y
+        cv2.circle(img, (x, y), 2, (255, 0, 0), -1)
 
-# добавляем данные в вектор
-model.add(Flatten())
+    # Выделение глаз на изображении
+    left_eye = landmarks.part(36).x, landmarks.part(36).y
+    right_eye = landmarks.part(45).x, landmarks.part(45).y
+    cv2.rectangle(img, (left_eye[0], left_eye[1]), (right_eye[0], right_eye[1]), (0, 0, 255), 2)
 
-# сравниваем вектор с вектором
-model.add(Dense(10, activation='sigmoid'))
+    # Выделение носа на изображении
+    nose = landmarks.part(30).x, landmarks.part(30).y
+    cv2.rectangle(img, (nose[0]-10, nose[1]-10), (nose[0]+10, nose[1]+10), (255, 0, 0), 2)
 
-# компилируем модель
-model.compile(loss='categorical_crossentropy',
-              optimizer='adam',
-              metrics=['accuracy'])
+    # Выделение губ на изображении
+    mouth_left = landmarks.part(48).x, landmarks.part(48).y
+    mouth_right = landmarks.part(54).x, landmarks.part(54).y
+    cv2.rectangle(img, (mouth_left[0], mouth_left[1]), (mouth_right[0], mouth_right[1]), (0, 255, 255), 2)
 
-# тренируем модель
-model.fit(X_train, y_train, epochs=2)
+# Загрузка изображений для сравнения
+image1 = face_recognition.load_image_file("image.jpg")
+image2 = face_recognition.load_image_file("image1.jpg")
 
-k = 1
-plt.imshow(X_test[k], cmap='binary')
-plt.axis('off')
-plt.show()
-print(y_test[k])
-print(
-    model.predict(np.array([X_test[k]]))
-)
+# Вычисление эмбеддинга лица на каждом изображении
+face_encoding1 = face_recognition.face_encodings(image1)[0]
+face_encoding2 = face_recognition.face_encodings(image2)[0]
 
-k = 2
-plt.imshow(X_test[k], cmap='binary')
-plt.axis('off')
-plt.show()
-print(y_test[k])
-print(
-    model.predict(np.array([X_test[k]]))
-)
+# Вычисление евклидова расстояния# Между эмбеддингами лиц
+distance = np.linalg.norm(face_encoding1 - face_encoding2)
 
-k = 6
-plt.imshow(X_test[k], cmap='binary')
-plt.axis('off')
-plt.show()
-print(y_test[k])
-print(
-    model.predict(np.array([X_test[k]]))
-)
+# Определение порогового значения для сравнения расстояний
+threshold = 0.6
+
+print("img1: ", face_encoding1)
+print("img2: ", face_encoding2)
+print("distance:", distance)
+
+# Сравнение расстояний и вывод результата
+if distance < threshold:
+    print("Лица на изображениях одинаковы")
+else:
+    print("Лица на изображениях разные")
+
+# Отображение изображения с найденными чертами лицаcv2.imshow('Распознавание черт лица на изображении', img)
+cv2.imshow('Распознавание черт лица на изображении', img)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
